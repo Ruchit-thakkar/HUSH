@@ -1,0 +1,26 @@
+export default function manifest() {
+  return {
+    name: "HUSH — Private Ephemeral Chat",
+    short_name: "HUSH",
+    description: "Say it. Don't save it. Ephemeral peer-to-peer chat rooms with zero message persistence.",
+    start_url: "/",
+    display: "standalone",
+    background_color: "#09090b",
+    theme_color: "#09090b",
+    orientation: "portrait",
+    icons: [
+      {
+        src: "/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any maskable",
+      },
+    ],
+  };
+}

@@ -8,28 +8,21 @@ const UserContext = createContext({
   regenerateUserId: () => {},
 });
 
-function getInitialUserId() {
-  if (typeof window === "undefined") return "";
-  try {
-    let id = sessionStorage.getItem("hush_session_user_id");
-    if (!id || !id.startsWith("USER-")) {
-      id = generateUserId();
-      sessionStorage.setItem("hush_session_user_id", id);
-    }
-    return id;
-  } catch {
-    return generateUserId();
-  }
-}
-
 export function UserProvider({ children }) {
-  const [userId, setUserId] = useState(getInitialUserId);
+  const [userId, setUserId] = useState("");
 
   useEffect(() => {
-    if (!userId) {
-      setUserId(getInitialUserId());
+    try {
+      let id = sessionStorage.getItem("hush_session_user_id");
+      if (!id || !id.startsWith("USER-")) {
+        id = generateUserId();
+        sessionStorage.setItem("hush_session_user_id", id);
+      }
+      setUserId(id);
+    } catch {
+      setUserId(generateUserId());
     }
-  }, [userId]);
+  }, []);
 
   const regenerateUserId = () => {
     const newId = generateUserId();

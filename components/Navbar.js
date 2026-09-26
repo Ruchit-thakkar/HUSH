@@ -2,8 +2,9 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ThemeToggle } from "./ThemeToggle";
-import { Shield, Users, Settings as SettingsIcon, LogOut, History, AlertTriangle } from "lucide-react";
+import { Users, Settings as SettingsIcon, LogOut, History, AlertTriangle } from "lucide-react";
 
 export function Navbar({
   roomId = null,
@@ -32,11 +33,18 @@ export function Navbar({
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="flex items-center gap-2 group focus:outline-none"
+            className="flex items-center gap-2.5 group focus:outline-none"
             title="HUSH Home"
           >
-            <div className="w-7 h-7 rounded-md bg-neutral-900 dark:bg-neutral-100 flex items-center justify-center text-white dark:text-neutral-950 transition-transform group-hover:scale-105">
-              <Shield className="w-4 h-4" />
+            <div className="w-7 h-7 rounded-md overflow-hidden bg-neutral-900 flex items-center justify-center transition-transform group-hover:scale-105 border border-neutral-200 dark:border-neutral-800">
+              <Image
+                src="/logo.png"
+                alt="HUSH Logo"
+                width={28}
+                height={28}
+                className="w-full h-full object-cover"
+                priority
+              />
             </div>
             <span className="font-semibold tracking-wider text-base text-neutral-900 dark:text-neutral-100 font-mono">
               HUSH

@@ -27,6 +27,7 @@ export default function RoomPage({ params }) {
     participants,
     messages,
     isHost,
+    hostId,
     hostConnected,
     connectedCount,
     sendMessage,
@@ -184,6 +185,7 @@ export default function RoomPage({ params }) {
       <ChatWindow
         messages={messages}
         myUserId={userId}
+        hostId={hostId}
       />
 
       {/* Bottom Message Composer */}

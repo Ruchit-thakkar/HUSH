@@ -11,6 +11,7 @@ export function useRoom({ roomId, userId }) {
   const [participants, setParticipants] = useState([]);
   const [peerStates, setPeerStates] = useState(new Map());
   const [isHost, setIsHost] = useState(false);
+  const [hostId, setHostId] = useState("");
   const [hostConnected, setHostConnected] = useState(true);
 
   // CRITICAL PRIVACY: Messages stored ONLY in React state memory.
@@ -20,11 +21,46 @@ export function useRoom({ roomId, userId }) {
   const meshRef = useRef(null);
   const pollTimerRef = useRef(null);
   const isJoinedRef = useRef(false);
+  const seenPeersRef = useRef(new Set());
 
   // Handle incoming chat message from peer DataChannel
   const handleIncomingMessage = useCallback((msg) => {
     setMessages((prev) => [...prev, msg]);
   }, []);
+
+  // System notification for user join
+  const handlePeerJoined = useCallback((peerId) => {
+    if (!peerId || peerId === userId) return;
+    if (!seenPeersRef.current.has(peerId)) {
+      seenPeersRef.current.add(peerId);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys_join_${peerId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          isSystem: true,
+          text: `${peerId} joined the room`,
+          timestamp: Date.now(),
+        },
+      ]);
+    }
+  }, [userId]);
+
+  // System notification for user leave
+  const handlePeerLeft = useCallback((peerId) => {
+    if (!peerId || peerId === userId) return;
+    if (seenPeersRef.current.has(peerId)) {
+      seenPeersRef.current.delete(peerId);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys_left_${peerId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          isSystem: true,
+          text: `${peerId} left the room`,
+          timestamp: Date.now(),
+        },
+      ]);
+    }
+  }, [userId]);
 
   // Handle explicit room closed signal from host
   const handleRoomClosed = useCallback((reason) => {
@@ -112,6 +148,8 @@ export function useRoom({ roomId, userId }) {
   const kickUser = useCallback(async (targetUserId) => {
     if (!isHost || targetUserId === userId) return;
     try {
+      handlePeerLeft(targetUserId);
+
       if (meshRef.current) {
         meshRef.current.broadcastUserKicked(targetUserId);
         meshRef.current.closePeer(targetUserId);
@@ -127,7 +165,7 @@ export function useRoom({ roomId, userId }) {
     } catch (err) {
       console.error("Failed to kick user:", err);
     }
-  }, [roomId, userId, isHost]);
+  }, [roomId, userId, isHost, handlePeerLeft]);
 
   // Participant or Host explicitly leaves room
   const leaveRoom = useCallback(async () => {
@@ -196,10 +234,18 @@ export function useRoom({ roomId, userId }) {
         const roomInfo = joinData.room;
         const hostStatus = roomInfo.hostId === userId;
         setIsHost(hostStatus);
+        setHostId(roomInfo.hostId || "");
         setHostConnected(roomInfo.hostConnected !== false);
         setParticipants(roomInfo.participants || []);
         isJoinedRef.current = true;
         setRoomStatus("active");
+
+        // Seed existing peers so we don't announce historical joins
+        (roomInfo.participants || []).forEach((p) => {
+          if (p.id !== userId) {
+            seenPeersRef.current.add(p.id);
+          }
+        });
 
         // Save local room metadata history (strictly metadata, NO messages)
         saveRoomMetadata({
@@ -230,6 +276,8 @@ export function useRoom({ roomId, userId }) {
           onRoomClosed: handleRoomClosed,
           onUserKicked: handleUserKicked,
           onHostDisconnected: handleHostDisconnected,
+          onPeerJoined: handlePeerJoined,
+          onPeerLeft: handlePeerLeft,
           sendSignalApi,
         });
 
@@ -277,6 +325,23 @@ export function useRoom({ roomId, userId }) {
               if (Array.isArray(pollData.participants)) {
                 setParticipants(pollData.participants);
                 mesh.syncParticipants(pollData.participants);
+
+                // Detect join/leave diffs
+                const activePeerIds = new Set(
+                  pollData.participants.filter((p) => p.id !== userId).map((p) => p.id)
+                );
+
+                for (const pId of activePeerIds) {
+                  if (!seenPeersRef.current.has(pId)) {
+                    handlePeerJoined(pId);
+                  }
+                }
+
+                for (const pId of Array.from(seenPeersRef.current)) {
+                  if (!activePeerIds.has(pId)) {
+                    handlePeerLeft(pId);
+                  }
+                }
 
                 // Update connection state
                 const otherPeers = pollData.participants.filter((p) => p.id !== userId);
@@ -340,6 +405,8 @@ export function useRoom({ roomId, userId }) {
     handleRoomClosed,
     handleUserKicked,
     handleHostDisconnected,
+    handlePeerJoined,
+    handlePeerLeft,
     sendSignalApi,
   ]);
 
@@ -353,6 +420,7 @@ export function useRoom({ roomId, userId }) {
     peerStates,
     messages,
     isHost,
+    hostId,
     hostConnected,
     connectedCount,
     sendMessage,

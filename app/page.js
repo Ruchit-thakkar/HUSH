@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Navbar } from "@/components/Navbar";
 import { Shield, ArrowRight, Plus, LogIn, Lock, Zap, EyeOff } from "lucide-react";
 
@@ -11,10 +12,22 @@ export default function HomePage() {
       <Navbar />
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center max-w-3xl mx-auto w-full">
-        {/* Minimal Shield Badge */}
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs font-mono text-neutral-600 dark:text-neutral-400 mb-8 shadow-xs">
-          <Shield className="w-3.5 h-3.5 text-neutral-500" />
-          <span>Say it. Don&apos;t save it.</span>
+        {/* App Logo & Badge */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-md mb-5 flex items-center justify-center">
+            <Image
+              src="/logo.png"
+              alt="HUSH Logo"
+              width={80}
+              height={80}
+              className="w-full h-full object-cover"
+              priority
+            />
+          </div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs font-mono text-neutral-600 dark:text-neutral-400 shadow-xs">
+            <Shield className="w-3.5 h-3.5 text-neutral-500" />
+            <span>Say it. Don&apos;t save it.</span>
+          </div>
         </div>
 
         {/* Brand Headline */}

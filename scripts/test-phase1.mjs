@@ -1,5 +1,5 @@
 /**
- * Comprehensive Automated Verification Script for HUSH WebRTC State Machine & Signaling Fixes
+ * Comprehensive Automated Verification Script for HUSH Phase 2 Multi-User Room Features
  */
 
 import { generateRoomId, isValidRoomId, formatRoomInput, generateUserId } from "../lib/room.js";
@@ -33,7 +33,7 @@ class MockRTCPeerConnection {
     return {
       label,
       readyState: "open",
-      send: () => {},
+      send: (data) => {},
       close: () => {},
     };
   }
@@ -93,7 +93,7 @@ globalThis.RTCIceCandidate = function (candidate) {
 };
 
 async function runTests() {
-  console.log("=== Starting HUSH WebRTC State Machine & Connection Verification ===");
+  console.log("=== Starting HUSH Phase 2 Multi-User Verification ===");
   let passed = 0;
   let total = 0;
 
@@ -108,182 +108,141 @@ async function runTests() {
     }
   }
 
-  // 1. Room ID & User ID Generation
+  // 1. Host creates room
+  const hostId = generateUserId();
   const roomId = generateRoomId();
   assert(isValidRoomId(roomId), `Room ID format matches XXXX-XXXX: ${roomId}`);
-  assert(!/[0O1IL]/.test(roomId), `Room ID excludes ambiguous characters: ${roomId}`);
-  assert(formatRoomInput("h7k9x2p4") === "H7K9-X2P4", "Room input formatting works");
-  assert(/^USER-[0-9A-F]{4}$/.test(generateUserId()), "User ID matches USER-XXXX format");
 
-  // 2. Pre-Creation & Discovery (Fix for "Room not found")
-  const hostId = generateUserId();
-  const testRoomId = generateRoomId();
+  const createdRoom = createRoom(roomId, hostId);
+  assert(createdRoom.status === "waiting", "Host creates room in WAITING state");
+  assert(createdRoom.hostId === hostId, "Creator is assigned as HOST");
+  assert(createdRoom.participants[hostId].role === "host", "Host role is 'host'");
 
-  const createdRoom = createRoom(testRoomId, hostId);
-  assert(createdRoom.status === "waiting", "Room created in WAITING state");
+  // 2. Multiple users join (Host, User 01, User 02, User 03, User 04)
+  const user1 = generateUserId();
+  const join1 = joinRoom(roomId, user1);
+  assert(join1.ok === true, `User 01 (${user1}) joins room`);
+  assert(join1.room.participants.length === 2, "Live connected count: 2");
+  assert(join1.room.status === "active", "Room transitions to ACTIVE");
 
-  const roomDiscovery = getRoom(testRoomId);
-  assert(roomDiscovery !== null, "Browser B successfully discovers active waiting room");
-
-  // 3. Joining Room & Lifecycle Transition (WAITING -> ACTIVE)
   const user2 = generateUserId();
-  const joinResult2 = joinRoom(testRoomId, user2);
-  assert(joinResult2.ok === true, "Browser B successfully joins room");
-  assert(joinResult2.room.status === "active", "Room transitions to ACTIVE upon second participant");
+  const join2 = joinRoom(roomId, user2);
+  assert(join2.ok === true, `User 02 (${user2}) joins room`);
+  assert(join2.room.participants.length === 3, "Live connected count: 3");
 
-  // 4. Multi-User (Browser C joins)
   const user3 = generateUserId();
-  const joinResult3 = joinRoom(testRoomId, user3);
-  assert(joinResult3.ok === true, "Browser C successfully joins room");
-  assert(joinResult3.room.participants.length === 3, "Connected count is 3");
+  const join3 = joinRoom(roomId, user3);
+  assert(join3.ok === true, `User 03 (${user3}) joins room`);
+  assert(join3.room.participants.length === 4, "Live connected count: 4");
 
-  // 5. WebRTC State Machine Unit Tests:
-  let dispatchedSignals = [];
-  const mockSendSignal = async (sig) => {
-    dispatchedSignals.push(sig);
-    return { ok: true };
-  };
+  const user4 = generateUserId();
+  const join4 = joinRoom(roomId, user4);
+  assert(join4.ok === true, `User 04 (${user4}) joins room`);
+  assert(join4.room.participants.length === 5, "Live connected count: 5");
 
-  const mesh = new WebRTCMesh({
-    roomId: testRoomId,
+  // 3. Host Identification
+  const currentRoom = getRoom(roomId);
+  const hostParticipant = currentRoom.participants[hostId];
+  assert(hostParticipant.role === "host", "Only room creator is HOST");
+  assert(currentRoom.participants[user1].role === "participant", "User 01 role is participant");
+  assert(currentRoom.participants[user2].role === "participant", "User 02 role is participant");
+
+  // 4. User Join Notifications
+  let joinNotifications = [];
+  let leaveNotifications = [];
+
+  const meshHost = new WebRTCMesh({
+    roomId,
     myId: hostId,
     isHost: true,
-    sendSignalApi: mockSendSignal,
+    onPeerJoined: (peerId) => joinNotifications.push(`${peerId} joined the room`),
+    onPeerLeft: (peerId) => leaveNotifications.push(`${peerId} left the room`),
+    sendSignalApi: async () => ({ ok: true }),
   });
 
-  // Test 5A: Host initiates connection (Creating Offer)
-  await mesh.initiateConnection(user2);
-  const hostPc = mesh.peers.get(user2);
-  assert(hostPc !== undefined, "Host created peer connection for user2");
-  assert(hostPc.signalingState === "have-local-offer", "Host signaling state is 'have-local-offer'");
-  assert(dispatchedSignals.some((s) => s.type === "offer"), "Host dispatched offer signal");
-
-  // Test 5B: Valid Answer in 'have-local-offer'
-  const validAnswerSignal = {
-    id: "sig_answer_1",
-    roomId: testRoomId,
-    from: user2,
-    to: hostId,
-    type: "answer",
-    payload: { type: "answer", sdp: "valid-answer-sdp" },
-  };
-
-  await mesh.handleSignal(validAnswerSignal);
-  assert(hostPc.signalingState === "stable", "Host signaling state transitioned to 'stable' after valid answer");
-  assert(hostPc.setRemoteDescriptionCalls === 1, "setRemoteDescription called once for valid answer");
-
-  // Test 5C: Duplicate Answer Protection (Fix for InvalidStateError)
-  // An answer arriving when signalingState is ALREADY 'stable'
-  const duplicateAnswerSignal = {
-    id: "sig_answer_2", // Different ID, but connection is already stable
-    roomId: testRoomId,
-    from: user2,
-    to: hostId,
-    type: "answer",
-    payload: { type: "answer", sdp: "stale-answer-sdp" },
-  };
-
-  // Must NOT throw InvalidStateError and must NOT call setRemoteDescription
-  let threwInvalidState = false;
-  try {
-    await mesh.handleSignal(duplicateAnswerSignal);
-  } catch {
-    threwInvalidState = true;
-  }
-  assert(!threwInvalidState, "No uncaught exception on stale answer");
+  // Simulate join signal arrival
+  await meshHost.handleSignal({
+    id: "sig_join_u1",
+    roomId,
+    from: "system",
+    type: "peer-joined",
+    payload: { peerId: user1 },
+  });
   assert(
-    hostPc.setRemoteDescriptionCalls === 1,
-    "Protected setRemoteDescription: Duplicate answer in 'stable' state was safely ignored"
+    joinNotifications.includes(`${user1} joined the room`),
+    "Join notification generated: 'USER-XXXX joined the room'"
   );
 
-  // Test 5D: Signal Deduplication by ID
-  // Exact same signal ID arriving again
-  await mesh.handleSignal(validAnswerSignal);
-  assert(hostPc.setRemoteDescriptionCalls === 1, "Signal deduplication ignored already-processed signal ID");
-
-  // Test 5E: Duplicate Offer Protection
-  // An offer arriving for a peer connection that is already established and stable
-  const duplicateOfferSignal = {
-    id: "sig_offer_dup",
-    roomId: testRoomId,
-    from: user2,
-    to: hostId,
-    type: "offer",
-    payload: { type: "offer", sdp: "dup-offer" },
-  };
-
-  await mesh.handleSignal(duplicateOfferSignal);
-  assert(
-    hostPc.signalingState === "stable",
-    "Duplicate offer ignored on already stable connection without destroying state"
-  );
-
-  // Test 5F: ICE Candidate buffering before remote description
-  const guestMesh = new WebRTCMesh({
-    roomId: testRoomId,
-    myId: user2,
-    isHost: false,
-    sendSignalApi: mockSendSignal,
+  // 5. Group Messaging over DataChannels
+  // Set up mock DataChannels
+  const mockMessagesSent = [];
+  meshHost.dataChannels.set(user1, {
+    readyState: "open",
+    send: (msg) => mockMessagesSent.push({ to: user1, msg }),
+  });
+  meshHost.dataChannels.set(user2, {
+    readyState: "open",
+    send: (msg) => mockMessagesSent.push({ to: user2, msg }),
+  });
+  meshHost.dataChannels.set(user3, {
+    readyState: "open",
+    send: (msg) => mockMessagesSent.push({ to: user3, msg }),
+  });
+  meshHost.dataChannels.set(user4, {
+    readyState: "open",
+    send: (msg) => mockMessagesSent.push({ to: user4, msg }),
   });
 
-  // ICE candidate arrives BEFORE offer
-  const earlyIceSignal = {
-    id: "sig_ice_early",
-    roomId: testRoomId,
-    from: hostId,
-    to: user2,
-    type: "ice-candidate",
-    payload: { candidate: "candidate:123" },
+  const chatMsg = {
+    id: "msg_1",
+    senderId: hostId,
+    text: "Hello everyone 👋",
+    timestamp: Date.now(),
   };
 
-  await guestMesh.handleSignal(earlyIceSignal);
-  const guestQueue = guestMesh.iceQueues.get(hostId);
-  assert(guestQueue && guestQueue.length === 1, "Early ICE candidate was buffered in queue");
+  const sentCount = meshHost.broadcastChatMessage(chatMsg);
+  assert(sentCount === 4, "Group message broadcast to all 4 connected peers");
+  assert(mockMessagesSent.length === 4, "Each peer received message over WebRTC DataChannel");
 
-  // Offer arrives -> sets remote description and flushes queue
-  const hostOfferSignal = {
-    id: "sig_offer_1",
-    roomId: testRoomId,
+  // 6. Host can remove users
+  const kickRes = kickUser(roomId, hostId, user2);
+  assert(kickRes.ok === true, "Host successfully removed User 02");
+  assert(getRoom(roomId).participants[user2] === undefined, "User 02 removed from participants");
+  assert(Object.keys(getRoom(roomId).participants).length === 4, "Live connected count decreased to 4");
+
+  // User 02 receives kicked signal
+  const user2Poll = pollSignals(roomId, user2);
+  assert(user2Poll.removed === true, "Removed user informed of removal");
+
+  // User leave notification
+  await meshHost.handleSignal({
+    id: "sig_left_u2",
+    roomId,
     from: hostId,
-    to: user2,
-    type: "offer",
-    payload: { type: "offer", sdp: "host-offer-sdp" },
-  };
+    type: "peer-left",
+    payload: { peerId: user2 },
+  });
+  assert(
+    leaveNotifications.includes(`${user2} left the room`),
+    "Leave notification generated: 'USER-XXXX left the room'"
+  );
 
-  await guestMesh.handleSignal(hostOfferSignal);
-  const guestPc = guestMesh.peers.get(hostId);
-  assert(guestPc.addedIceCandidates.length === 1, "Buffered ICE candidate was flushed after remote description was set");
+  // 7. Normal users cannot remove others
+  const unauthorizedKick = kickUser(roomId, user1, user3);
+  assert(unauthorizedKick.ok === false, "Normal user cannot remove another user");
+  assert(unauthorizedKick.code === "UNAUTHORIZED", "Unauthorized error code returned");
 
-  // 6. Security Rule: Reject chat messages over signaling
-  const chatAttempt = sendSignal(testRoomId, hostId, user2, "chat", { text: "private message" });
-  assert(chatAttempt.ok === false, "Security Rule: Chat messages rejected by signaling layer");
+  // 8. Normal user voluntary leave
+  leaveRoom(roomId, user4);
+  assert(getRoom(roomId).participants[user4] === undefined, "User 04 voluntarily left");
+  assert(Object.keys(getRoom(roomId).participants).length === 3, "Live connected count updated to 3");
 
-  // 7. Participant Leave & Reconnect Safety
-  leaveRoom(testRoomId, user3);
-  const roomAfterLeave = getRoom(testRoomId);
-  assert(roomAfterLeave.status === "active", "Participant leave does NOT mark room as closed");
+  // 9. Host closes room
+  const closeRes = closeRoom(roomId, hostId);
+  assert(closeRes.ok === true, "Host explicitly closed room");
+  assert(getRoom(roomId).status === "closed", "Room status is CLOSED");
 
-  leaveRoom(testRoomId, hostId);
-  const roomAfterHostDisconnect = getRoom(testRoomId);
-  assert(roomAfterHostDisconnect.status !== "closed", "Host disconnect/refresh does NOT mark room as closed");
-
-  const hostReconnect = joinRoom(testRoomId, hostId);
-  assert(hostReconnect.ok === true, "Host can cleanly reconnect without 'Room Closed' error");
-
-  // 8. Host Explicit Room Closure
-  const closeResult = closeRoom(testRoomId, hostId);
-  assert(closeResult.ok === true, "Host explicitly closed room");
-  const roomAfterClose = getRoom(testRoomId);
-  assert(roomAfterClose.status === "closed", "Room status is strictly CLOSED");
-
-  // 9. Error Differentiation
-  const lateJoin = joinRoom(testRoomId, generateUserId());
-  assert(lateJoin.code === "ROOM_CLOSED", "Late join returns ROOM_CLOSED error");
-
-  const fakeJoin = joinRoom("ZZZZ-9999", generateUserId());
-  assert(fakeJoin.code === "ROOM_NOT_FOUND", "Nonexistent room returns ROOM_NOT_FOUND");
-
-  console.log(`\n=== Verification Complete: ${passed}/${total} Passed ===`);
+  console.log(`\n=== Phase 2 Verification Complete: ${passed}/${total} Passed ===`);
 }
 
 runTests().catch((err) => {

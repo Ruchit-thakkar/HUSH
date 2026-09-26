@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { Lock, ShieldCheck } from "lucide-react";
 
-export function ChatWindow({ messages = [], myUserId = "" }) {
+export function ChatWindow({ messages = [], myUserId = "", hostId = "" }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -44,6 +44,7 @@ export function ChatWindow({ messages = [], myUserId = "" }) {
               key={msg.id}
               message={msg}
               isMe={msg.senderId === myUserId}
+              isHostSender={msg.senderId === hostId}
             />
           ))}
           <div ref={bottomRef} />
