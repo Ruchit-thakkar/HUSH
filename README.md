@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# HUSH
+
+> **Say it. Don't save it.**
+
+Private conversations. Nothing to keep.
+
+HUSH is a modern, privacy-first ephemeral chat web application built with **Next.js (App Router)**, **Tailwind CSS**, and **WebRTC DataChannels** for peer-to-peer real-time communication.
+
+---
+
+## Core Privacy Architecture
+
+- **Zero Database**: No MongoDB, Firebase, Supabase, PostgreSQL, or Redis.
+- **No Chat Persistence**: Chat messages exist exclusively in active application memory during the active session.
+- **Encrypted Peer-to-Peer Transport**: WebRTC DataChannels transmit messages directly between participants with built-in DTLS/SCTP encryption.
+- **Ephemeral Session Identity**: Random temporary participant IDs (e.g. `USER-7F42`). No accounts, phone numbers, or emails.
+- **Unpredictable Room Codes**: Random 8-character codes (e.g. `H7K9-X2P4`) excluding ambiguous characters (`0`, `O`, `1`, `I`, `L`).
+- **Room History strictly means Metadata**: Only room codes and timestamps are saved locally in the browser's `localStorage` for convenience. Chat messages are **never** stored.
+- **Instant Dissolution**: Leaving the room or host closing the room wipes all active session messages permanently.
+
+---
+
+## Phase 1 Features
+
+1. **Minimal Premium Landing Page**
+   - Direct privacy guarantees: *"Private conversations. Nothing to keep."*
+   - Immediate actions: `[ Create Room ]` and `[ Join Room ]`.
+
+2. **Create Room**
+   - Instant random code generation (`XXXX-XXXX`).
+   - One-click copy and shareable link.
+   - Creator is assigned the `HOST` role.
+
+3. **Join Room**
+   - Auto-formatting room code input.
+   - Real-time room status validation (`Room not found`, `This room has been closed`, `Room is full`).
+
+4. **Multi-User Real-time Chat**
+   - WebRTC DataChannel mesh for connected participants.
+   - Clearly separated message bubbles (My messages vs other participants).
+   - Prominent connected participant counter.
+   - Auto-scrolling message stream.
+   - Keyboard `Enter` to send.
+
+5. **Host Controls**
+   - View participant list (`USER-XXXX` badges).
+   - Remove/kick disruptive participants.
+   - Close room for all participants with confirmation modal.
+   - Displays *"Room Closed. All messages from this session have been discarded."*
+
+6. **Participant Leave Room**
+   - Disconnects WebRTC peer connections.
+   - Clears message memory state immediately.
+   - Returns to Home.
+
+7. **Room History (Metadata Only)**
+   - Displays past visited rooms with created date and status.
+   - `[ Clear Room History ]` button.
+
+8. **Settings & Themes**
+   - Dark Mode (Near-black `#09090b`, dark cards, subtle borders).
+   - Light Mode (Clean neutral `#fbfbfb` / white palette).
+   - Temporary User ID display and regeneration.
+   - Privacy architecture disclosure.
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 18+ (tested on Node v24)
+- npm 9+
+
+### Installation & Run
 
 ```bash
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Or build and run production server
+npm run build
+npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Visit [http://localhost:3000](http://localhost:3000) in your browser.
