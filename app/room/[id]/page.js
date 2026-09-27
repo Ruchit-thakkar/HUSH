@@ -7,9 +7,11 @@ import { ChatWindow } from "@/components/ChatWindow";
 import { MessageInput } from "@/components/MessageInput";
 import { ParticipantModal } from "@/components/ParticipantModal";
 import { CloseRoomModal } from "@/components/CloseRoomModal";
+import { VideoGrid } from "@/components/VideoGrid";
+import { CallControls } from "@/components/CallControls";
 import { useUser } from "@/context/UserContext";
 import { useRoom } from "@/hooks/useRoom";
-import { AlertCircle, ArrowLeft, Loader2, ShieldOff, UserX, AlertTriangle } from "lucide-react";
+import { AlertCircle, ArrowLeft, Loader2, ShieldOff, UserX, AlertTriangle, RefreshCw } from "lucide-react";
 
 export default function RoomPage({ params }) {
   const unwrappedParams = use(params);
@@ -30,6 +32,20 @@ export default function RoomPage({ params }) {
     hostId,
     hostConnected,
     connectedCount,
+    // Phase 3: Media & Call State
+    localStream,
+    remoteStreams,
+    peerMediaStates,
+    isAudioEnabled,
+    isVideoEnabled,
+    inCall,
+    mediaError,
+    toggleAudio,
+    toggleVideo,
+    startCall,
+    leaveCall,
+    retryMedia,
+    // Room Actions
     sendMessage,
     closeRoom,
     kickUser,
@@ -48,6 +64,12 @@ export default function RoomPage({ params }) {
     setIsCloseModalOpen(false);
     await closeRoom();
   };
+
+  // Determine if a media call session is active (locally or remotely)
+  const isCallActive =
+    inCall ||
+    remoteStreams.size > 0 ||
+    Array.from(peerMediaStates.values()).some((s) => s.inCall);
 
   // State 1: Connecting initially
   if (roomStatus === "connecting" && !errorMessage) {
@@ -81,7 +103,7 @@ export default function RoomPage({ params }) {
           </h2>
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-6 leading-relaxed">
             {isHost
-              ? "Messages from this session were not stored."
+              ? "Messages and media streams from this session were not stored."
               : "This room has been closed by the host."}
           </p>
           <button
@@ -160,7 +182,7 @@ export default function RoomPage({ params }) {
     );
   }
 
-  // State 5: Active Chat Room
+  // State 5: Active Room (Text Chat + Video & Voice Call)
   return (
     <div className="h-screen max-h-screen flex flex-col bg-[#fbfbfb] dark:bg-[#09090b] text-[#09090b] dark:text-[#f4f4f5] overflow-hidden transition-colors">
       <Navbar
@@ -173,25 +195,107 @@ export default function RoomPage({ params }) {
         isHost={isHost}
       />
 
-      {/* Host Disconnected Notice (if non-host and host disconnected) */}
+      {/* Host Disconnected Notice */}
       {!isHost && !hostConnected && (
-        <div className="w-full bg-amber-500/10 border-b border-amber-500/20 py-1.5 px-4 text-center text-xs text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1.5 font-mono">
+        <div className="w-full bg-amber-500/10 border-b border-amber-500/20 py-1.5 px-4 text-center text-xs text-amber-600 dark:text-amber-400 flex items-center justify-center gap-1.5 font-mono shrink-0">
           <AlertTriangle className="w-3.5 h-3.5" />
           <span>Host disconnected. Waiting for host to reconnect...</span>
         </div>
       )}
 
-      {/* Main Chat Interface */}
-      <ChatWindow
-        messages={messages}
-        myUserId={userId}
-        hostId={hostId}
-      />
+      {/* Call Invitation Toolbar when call is not active */}
+      {!isCallActive && (
+        <div className="w-full border-b border-neutral-200 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-900/40 px-4 py-2 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-neutral-400" />
+            <span className="text-xs font-mono text-neutral-600 dark:text-neutral-400">
+              P2P Encrypted Voice & Video
+            </span>
+          </div>
+          <CallControls
+            inCall={false}
+            onStartCall={startCall}
+          />
+        </div>
+      )}
 
-      {/* Bottom Message Composer */}
-      <MessageInput
-        onSendMessage={sendMessage}
-      />
+      {/* Media Permission Warning Banner (if call inactive but permission error occurred) */}
+      {!isCallActive && mediaError && (
+        <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-xs text-amber-600 dark:text-amber-400 font-mono shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <span>{mediaError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={retryMedia}
+            className="flex items-center gap-1 px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-medium cursor-pointer"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>Try Again</span>
+          </button>
+        </div>
+      )}
+
+      {/* Main Room Body */}
+      {isCallActive ? (
+        /* Video Grid + Chat Split / Stacked View */
+        <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+          {/* Left/Top: Video Grid & Controls */}
+          <div className="w-full lg:w-3/5 xl:w-2/3 flex flex-col p-2 sm:p-3 min-h-[220px] sm:min-h-[270px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-neutral-200 dark:border-neutral-800 bg-neutral-950/20">
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <VideoGrid
+                myUserId={userId}
+                hostId={hostId}
+                isHost={isHost}
+                localStream={localStream}
+                remoteStreams={remoteStreams}
+                peerMediaStates={peerMediaStates}
+                isAudioEnabled={isAudioEnabled}
+                isVideoEnabled={isVideoEnabled}
+                inCall={inCall}
+                mediaError={mediaError}
+                retryMedia={retryMedia}
+              />
+            </div>
+            <div className="shrink-0 flex justify-center pt-2">
+              <CallControls
+                inCall={inCall}
+                isAudioEnabled={isAudioEnabled}
+                isVideoEnabled={isVideoEnabled}
+                onToggleAudio={toggleAudio}
+                onToggleVideo={toggleVideo}
+                onLeaveCall={leaveCall}
+                onStartCall={startCall}
+              />
+            </div>
+          </div>
+
+          {/* Right/Bottom: Parallel Text Chat Window & Input */}
+          <div className="w-full lg:w-2/5 xl:w-1/3 flex-1 flex flex-col min-h-0 overflow-hidden">
+            <ChatWindow
+              messages={messages}
+              myUserId={userId}
+              hostId={hostId}
+            />
+            <MessageInput
+              onSendMessage={sendMessage}
+            />
+          </div>
+        </div>
+      ) : (
+        /* Standard Full-Width Text Chat View */
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <ChatWindow
+            messages={messages}
+            myUserId={userId}
+            hostId={hostId}
+          />
+          <MessageInput
+            onSendMessage={sendMessage}
+          />
+        </div>
+      )}
 
       {/* Participants & Host Controls Modal */}
       <ParticipantModal
