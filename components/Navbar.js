@@ -1,10 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ThemeToggle } from "./ThemeToggle";
-import { Users, Settings as SettingsIcon, LogOut, History, AlertTriangle } from "lucide-react";
+import { Users, Settings as SettingsIcon, LogOut, History, AlertTriangle, Link2, Check } from "lucide-react";
 
 export function Navbar({
   roomId = null,
@@ -15,6 +15,29 @@ export function Navbar({
   onLeaveRoom = null,
   isHost = false,
 }) {
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleCopyLink = async () => {
+    if (!roomId || typeof window === "undefined") return;
+    const link = `${window.location.origin}/join/${roomId}`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = link;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy link:", err);
+    }
+  };
+
   const getConnectionLabel = () => {
     if (connectionState === "connecting") return "Connecting...";
     if (connectionState === "waiting_participant") return "Waiting for Participant";
@@ -72,6 +95,27 @@ export function Navbar({
         <div className="flex items-center gap-2">
           {roomId ? (
             <>
+              {/* Copy Room Link Button */}
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 transition-colors cursor-pointer"
+                title="Copy Room Link (/join/CODE)"
+              >
+                {copiedLink ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-emerald-500 font-semibold">Room link copied.</span>
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Copy Room Link</span>
+                    <span className="sm:hidden">Link</span>
+                  </>
+                )}
+              </button>
+
               {/* Connection Status & Participant Count */}
               <button
                 type="button"

@@ -84,6 +84,15 @@ HUSH is a modern, privacy-first ephemeral chat web application built with **Next
 
 ---
 
+## Phase 6: Whiteboard, Reactions & Room Links
+
+- **📝 Collaborative Whiteboard**: Real-time multi-user drawing canvas with freehand pen, eraser, shapes (line, rectangle, circle), text, per-user undo/redo, and room-wide clear. Synchronized purely via lightweight WebRTC DataChannel events.
+- **😀 Temporary Reactions**: Floating emoji reactions (`😀`, `😂`, `❤️`, `👍`, `👎`, `🔥`, `🎉`, `😮`) with upward floating animations that auto-expire in 3 seconds. Client-side rate limited to 5 reactions/second.
+- **🔗 Shareable Room Links**: Instant room link generation (`/join/XXXX-XXXX`) and invitation page. Clicking **Copy Room Link** copies the direct URL with confirmation toast.
+- **🚫 Zero Persistence**: Whiteboard operations and reactions are strictly discarded upon leaving or closing the room. Room History preserves only room metadata.
+
+---
+
 ## Getting Started
 
 ### Prerequisites

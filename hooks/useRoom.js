@@ -44,6 +44,17 @@ export function useRoom({ roomId, userId }) {
   const [screenSharerId, setScreenSharerId] = useState(null);
   const [screenShareError, setScreenShareError] = useState(null);
 
+  // ==========================================
+  // PHASE 6: REACTIONS & WHITEBOARD STATE
+  // ==========================================
+  const [reactions, setReactions] = useState([]); // [{ reactionId, userId, emoji, timestamp }]
+  const [whiteboardOps, setWhiteboardOps] = useState([]); // [{ id, userId, type, ... }]
+  const whiteboardOpsRef = useRef([]);
+
+  useEffect(() => {
+    whiteboardOpsRef.current = whiteboardOps;
+  }, [whiteboardOps]);
+
   const meshRef = useRef(null);
   const pollTimerRef = useRef(null);
   const isJoinedRef = useRef(false);
@@ -89,6 +100,65 @@ export function useRoom({ roomId, userId }) {
   const handleIncomingMessage = useCallback((msg) => {
     setMessages((prev) => [...prev, msg]);
   }, []);
+
+  // Phase 6: Handle incoming temporary reaction
+  const handleIncomingReaction = useCallback((reaction) => {
+    if (!reaction || !reaction.reactionId) return;
+    setReactions((prev) => [...prev, reaction]);
+    setTimeout(() => {
+      setReactions((prev) => prev.filter((r) => r.reactionId !== reaction.reactionId));
+    }, 3200);
+  }, []);
+
+  // Phase 6: Broadcast temporary reaction to room
+  const sendReaction = useCallback((reaction) => {
+    if (!reaction || !reaction.reactionId) return;
+    setReactions((prev) => [...prev, reaction]);
+    if (meshRef.current) {
+      meshRef.current.broadcastReaction(reaction);
+    }
+    setTimeout(() => {
+      setReactions((prev) => prev.filter((r) => r.reactionId !== reaction.reactionId));
+    }, 3200);
+  }, []);
+
+  // Phase 6: Whiteboard operations
+  const sendWhiteboardOp = useCallback((op) => {
+    if (!op || !op.id) return;
+    setWhiteboardOps((prev) => {
+      if (prev.some((existing) => existing.id === op.id)) return prev;
+      return [...prev, op];
+    });
+    if (meshRef.current) {
+      meshRef.current.broadcastWhiteboardOp(op);
+    }
+  }, []);
+
+  const undoWhiteboardOp = useCallback((operationId, opUserId) => {
+    if (!operationId) return;
+    setWhiteboardOps((prev) => prev.filter((op) => op.id !== operationId));
+    if (meshRef.current) {
+      meshRef.current.broadcastWhiteboardUndo(operationId, opUserId);
+    }
+  }, []);
+
+  const redoWhiteboardOp = useCallback((op) => {
+    if (!op || !op.id) return;
+    setWhiteboardOps((prev) => {
+      if (prev.some((existing) => existing.id === op.id)) return prev;
+      return [...prev, op];
+    });
+    if (meshRef.current) {
+      meshRef.current.broadcastWhiteboardRedo(op);
+    }
+  }, []);
+
+  const clearWhiteboard = useCallback(() => {
+    setWhiteboardOps([]);
+    if (meshRef.current) {
+      meshRef.current.broadcastWhiteboardClear(userId);
+    }
+  }, [userId]);
 
   // System notification for user join
   const handlePeerJoined = useCallback(
@@ -267,6 +337,9 @@ export function useRoom({ roomId, userId }) {
   const handleRoomClosed = useCallback(
     (reason) => {
       stopLocalTracks();
+      setWhiteboardOps([]);
+      whiteboardOpsRef.current = [];
+      setReactions([]);
       setRoomStatus("closed");
       setErrorMessage(reason || "This room has been closed by the host.");
       updateRoomMetadataStatus(roomId, "Closed");
@@ -282,6 +355,9 @@ export function useRoom({ roomId, userId }) {
   const handleUserKicked = useCallback(
     (reason) => {
       stopLocalTracks();
+      setWhiteboardOps([]);
+      whiteboardOpsRef.current = [];
+      setReactions([]);
       setRoomStatus("removed");
       setErrorMessage(reason || "You have been removed from this room.");
       updateRoomMetadataStatus(roomId, "Removed");
@@ -747,6 +823,9 @@ export function useRoom({ roomId, userId }) {
       });
       createdBlobUrlsRef.current.clear();
       receiverTransfersRef.current.clear();
+      setWhiteboardOps([]);
+      whiteboardOpsRef.current = [];
+      setReactions([]);
 
       await fetch(`/api/rooms/${roomId}/leave`, {
         method: "POST",
@@ -757,6 +836,8 @@ export function useRoom({ roomId, userId }) {
       console.error("Failed to leave room:", err);
     } finally {
       setMessages([]);
+      setWhiteboardOps([]);
+      setReactions([]);
     }
   }, [roomId, userId, stopLocalTracks]);
 
@@ -961,6 +1042,48 @@ export function useRoom({ roomId, userId }) {
                     : m
                 )
               );
+            });
+          },
+          // Phase 6: Reactions & Whiteboard callbacks
+          onReaction: handleIncomingReaction,
+          onWhiteboardOp: (op) => {
+            if (!op || !op.id) return;
+            setWhiteboardOps((prev) => {
+              if (prev.some((existing) => existing.id === op.id)) return prev;
+              return [...prev, op];
+            });
+          },
+          onWhiteboardUndo: ({ operationId }) => {
+            if (!operationId) return;
+            setWhiteboardOps((prev) => prev.filter((op) => op.id !== operationId));
+          },
+          onWhiteboardRedo: ({ op }) => {
+            if (!op || !op.id) return;
+            setWhiteboardOps((prev) => {
+              if (prev.some((existing) => existing.id === op.id)) return prev;
+              return [...prev, op];
+            });
+          },
+          onWhiteboardClear: () => {
+            setWhiteboardOps([]);
+          },
+          onWhiteboardSyncRequest: (payload, peerId) => {
+            if (meshRef.current && whiteboardOpsRef.current.length > 0) {
+              meshRef.current.sendWhiteboardSyncState(peerId, whiteboardOpsRef.current);
+            }
+          },
+          onWhiteboardSyncState: (remoteOps) => {
+            if (!Array.isArray(remoteOps) || remoteOps.length === 0) return;
+            setWhiteboardOps((prev) => {
+              const existingIds = new Set(prev.map((o) => o.id));
+              const merged = [...prev];
+              for (const rop of remoteOps) {
+                if (rop && rop.id && !existingIds.has(rop.id)) {
+                  merged.push(rop);
+                  existingIds.add(rop.id);
+                }
+              }
+              return merged;
             });
           },
           sendSignalApi,
@@ -1249,5 +1372,13 @@ export function useRoom({ roomId, userId }) {
         )
       );
     },
+    // Phase 6: Reactions & Whiteboard exports
+    reactions,
+    sendReaction,
+    whiteboardOps,
+    sendWhiteboardOp,
+    undoWhiteboardOp,
+    redoWhiteboardOp,
+    clearWhiteboard,
   };
 }

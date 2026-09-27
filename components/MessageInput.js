@@ -3,10 +3,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Send, Paperclip, X, FileText, AlertTriangle } from "lucide-react";
 import { formatFileSize, MAX_FILE_SIZE, isAcceptedImageType } from "@/lib/file-transfer";
+import { ReactionsBar } from "./Reactions";
 
 export function MessageInput({
   onSendMessage,
   onSendFile,
+  onSendReaction,
+  userId,
   disabled = false,
   placeholder = "Type a message...",
 }) {
@@ -209,6 +212,13 @@ export function MessageInput({
           >
             <Paperclip className="w-4 h-4" />
           </button>
+
+          {/* Temporary Reactions Picker */}
+          {onSendReaction && (
+            <div className="shrink-0">
+              <ReactionsBar onSendReaction={onSendReaction} userId={userId} />
+            </div>
+          )}
 
           {/* Text Message Input */}
           <input

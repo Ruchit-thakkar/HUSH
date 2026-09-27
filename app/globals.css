@@ -53,3 +53,26 @@ html, body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(120, 120, 120, 0.4);
 }
+
+@keyframes hush-float-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.6) translateX(0);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-20px) scale(1.15) translateX(calc(var(--drift-x, 0px) * 0.2));
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-120px) scale(1) translateX(calc(var(--drift-x, 0px) * 0.6));
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-260px) scale(0.9) translateX(var(--drift-x, 0px));
+  }
+}
+

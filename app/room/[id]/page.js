@@ -10,9 +10,21 @@ import { CloseRoomModal } from "@/components/CloseRoomModal";
 import { VideoGrid } from "@/components/VideoGrid";
 import { ScreenShareView } from "@/components/ScreenShareView";
 import { CallControls } from "@/components/CallControls";
+import { Whiteboard } from "@/components/Whiteboard";
+import { ReactionsOverlay, ReactionsBar } from "@/components/Reactions";
 import { useUser } from "@/context/UserContext";
 import { useRoom } from "@/hooks/useRoom";
-import { AlertCircle, ArrowLeft, Loader2, ShieldOff, UserX, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Loader2,
+  ShieldOff,
+  UserX,
+  AlertTriangle,
+  RefreshCw,
+  MessageSquare,
+  PenTool,
+} from "lucide-react";
 
 export default function RoomPage({ params }) {
   const unwrappedParams = use(params);
@@ -22,6 +34,7 @@ export default function RoomPage({ params }) {
 
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [activeRoomTab, setActiveRoomTab] = useState("chat"); // 'chat' | 'whiteboard'
 
   const {
     roomStatus,
@@ -62,6 +75,14 @@ export default function RoomPage({ params }) {
     // Phase 5: File & Image Transfer
     sendFile,
     cancelFileTransfer,
+    // Phase 6: Reactions & Whiteboard
+    reactions,
+    sendReaction,
+    whiteboardOps,
+    sendWhiteboardOp,
+    undoWhiteboardOp,
+    redoWhiteboardOp,
+    clearWhiteboard,
   } = useRoom({
     roomId,
     userId,
@@ -194,9 +215,12 @@ export default function RoomPage({ params }) {
     );
   }
 
-  // State 5: Active Room (Text Chat + Video & Voice Call + Screen Share)
+  // State 5: Active Room (Text Chat + Video & Voice Call + Screen Share + Whiteboard + Reactions)
   return (
-    <div className="h-screen max-h-screen flex flex-col bg-[#fbfbfb] dark:bg-[#09090b] text-[#09090b] dark:text-[#f4f4f5] overflow-hidden transition-colors">
+    <div className="h-screen max-h-screen flex flex-col bg-[#fbfbfb] dark:bg-[#09090b] text-[#09090b] dark:text-[#f4f4f5] overflow-hidden transition-colors relative">
+      {/* Floating Ephemeral Reactions Overlay */}
+      <ReactionsOverlay reactions={reactions} />
+
       <Navbar
         roomId={roomId}
         connectedCount={connectedCount}
@@ -274,7 +298,7 @@ export default function RoomPage({ params }) {
 
       {/* Main Room Body */}
       {isMediaActive ? (
-        /* Video Grid / Screen Share + Chat Split View */
+        /* Video Grid / Screen Share + Chat/Whiteboard Split View */
         <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
           {/* Left/Top: Media Display (Screen Share or Video Grid) & Call Controls */}
           <div className="w-full lg:w-3/5 xl:w-2/3 flex flex-col p-2 sm:p-3 min-h-[260px] sm:min-h-[300px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-neutral-200 dark:border-neutral-800 bg-neutral-950/20">
@@ -353,33 +377,134 @@ export default function RoomPage({ params }) {
             </div>
           </div>
 
-          {/* Right/Bottom: Parallel Text Chat Window & Input */}
-          <div className="w-full lg:w-2/5 xl:w-1/3 flex-1 flex flex-col min-h-0 overflow-hidden">
-            <ChatWindow
-              messages={messages}
-              myUserId={userId}
-              hostId={hostId}
-              onCancelTransfer={cancelFileTransfer}
-            />
-            <MessageInput
-              onSendMessage={sendMessage}
-              onSendFile={sendFile}
-            />
+          {/* Right/Bottom: Parallel Chat / Whiteboard Column */}
+          <div className="w-full lg:w-2/5 xl:w-1/3 flex-1 flex flex-col min-h-0 overflow-hidden border-t lg:border-t-0 border-neutral-200 dark:border-neutral-800">
+            {/* View Mode Switcher Header: [ 💬 Chat ] [ 📝 Whiteboard ] */}
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-100/50 dark:bg-neutral-900/50 shrink-0">
+              <div className="flex items-center gap-1 bg-neutral-200/60 dark:bg-neutral-800/60 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setActiveRoomTab("chat")}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
+                    activeRoomTab === "chat"
+                      ? "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-xs font-semibold"
+                      : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Chat</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveRoomTab("whiteboard")}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
+                    activeRoomTab === "whiteboard"
+                      ? "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-xs font-semibold"
+                      : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+                  }`}
+                >
+                  <PenTool className="w-3.5 h-3.5" />
+                  <span>Whiteboard</span>
+                </button>
+              </div>
+              <ReactionsBar onSendReaction={sendReaction} userId={userId} />
+            </div>
+
+            {/* Tab Body */}
+            {activeRoomTab === "chat" ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <ChatWindow
+                  messages={messages}
+                  myUserId={userId}
+                  hostId={hostId}
+                  onCancelTransfer={cancelFileTransfer}
+                />
+                <MessageInput
+                  onSendMessage={sendMessage}
+                  onSendFile={sendFile}
+                  onSendReaction={sendReaction}
+                  userId={userId}
+                />
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <Whiteboard
+                  operations={whiteboardOps}
+                  myUserId={userId}
+                  onSendOperation={sendWhiteboardOp}
+                  onUndoOperation={undoWhiteboardOp}
+                  onRedoOperation={redoWhiteboardOp}
+                  onClearWhiteboard={clearWhiteboard}
+                />
+              </div>
+            )}
           </div>
         </div>
       ) : (
-        /* Standard Full-Width Text Chat View */
+        /* Standard View: Subheader with [ 💬 Chat ] [ 📝 Whiteboard ] & Reactions */
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <ChatWindow
-            messages={messages}
-            myUserId={userId}
-            hostId={hostId}
-            onCancelTransfer={cancelFileTransfer}
-          />
-          <MessageInput
-            onSendMessage={sendMessage}
-            onSendFile={sendFile}
-          />
+          {/* Subheader Bar with Tab Switcher */}
+          <div className="w-full border-b border-neutral-200 dark:border-neutral-800 bg-neutral-100/50 dark:bg-neutral-900/30 px-4 py-2 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-1 bg-neutral-200/60 dark:bg-neutral-800/60 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setActiveRoomTab("chat")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
+                  activeRoomTab === "chat"
+                    ? "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-xs font-semibold"
+                    : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Chat</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveRoomTab("whiteboard")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
+                  activeRoomTab === "whiteboard"
+                    ? "bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-xs font-semibold"
+                    : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+                }`}
+              >
+                <PenTool className="w-3.5 h-3.5" />
+                <span>Whiteboard</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <ReactionsBar onSendReaction={sendReaction} userId={userId} />
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          {activeRoomTab === "chat" ? (
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <ChatWindow
+                messages={messages}
+                myUserId={userId}
+                hostId={hostId}
+                onCancelTransfer={cancelFileTransfer}
+              />
+              <MessageInput
+                onSendMessage={sendMessage}
+                onSendFile={sendFile}
+                onSendReaction={sendReaction}
+                userId={userId}
+              />
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <Whiteboard
+                operations={whiteboardOps}
+                myUserId={userId}
+                onSendOperation={sendWhiteboardOp}
+                onUndoOperation={undoWhiteboardOp}
+                onRedoOperation={redoWhiteboardOp}
+                onClearWhiteboard={clearWhiteboard}
+              />
+            </div>
+          )}
         </div>
       )}
 
