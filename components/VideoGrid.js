@@ -16,6 +16,7 @@ export function VideoGrid({
   inCall,
   mediaError,
   retryMedia,
+  compact = false,
 }) {
   // Collect all call tiles (local + remote)
   const tiles = [];
@@ -63,7 +64,27 @@ export function VideoGrid({
     }
   }
 
-  // Determine optimal responsive grid column layout
+  // Compact layout (e.g. participant strip below ScreenShareView)
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2 w-full h-full overflow-x-auto py-1 px-1">
+        {tiles.map((tile) => (
+          <div key={tile.id} className="w-28 sm:w-36 h-full shrink-0">
+            <VideoTile
+              userId={tile.id}
+              isLocal={tile.isLocal}
+              isHost={tile.isHost}
+              stream={tile.stream}
+              isVideoEnabled={tile.isVideoEnabled}
+              isAudioEnabled={tile.isAudioEnabled}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Standard responsive grid column layout
   const count = tiles.length;
   let gridColsClass = "grid-cols-1";
   if (count === 2) {

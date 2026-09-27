@@ -16,20 +16,41 @@ export function VideoTile({
 
   // Bind video element to stream
   useEffect(() => {
-    if (videoRef.current && stream) {
-      if (videoRef.current.srcObject !== stream) {
-        videoRef.current.srcObject = stream;
+    const videoEl = videoRef.current;
+    if (videoEl) {
+      if (stream && isVideoEnabled) {
+        if (videoEl.srcObject !== stream) {
+          videoEl.srcObject = stream;
+        }
+      } else {
+        videoEl.srcObject = null;
       }
     }
+    return () => {
+      if (videoEl) {
+        videoEl.srcObject = null;
+      }
+    };
   }, [stream, isVideoEnabled]);
 
-  // Bind audio element to remote stream (local is never played to prevent echo)
+  // Bind audio element to remote stream (strictly muted for local to prevent echo)
   useEffect(() => {
-    if (!isLocal && audioRef.current && stream) {
-      if (audioRef.current.srcObject !== stream) {
-        audioRef.current.srcObject = stream;
+    const audioEl = audioRef.current;
+    if (!isLocal && audioEl) {
+      audioEl.volume = 1.0;
+      if (stream) {
+        if (audioEl.srcObject !== stream) {
+          audioEl.srcObject = stream;
+        }
+      } else {
+        audioEl.srcObject = null;
       }
     }
+    return () => {
+      if (audioEl) {
+        audioEl.srcObject = null;
+      }
+    };
   }, [stream, isLocal]);
 
   // Short display name (e.g. USER-A821 or short hash)
@@ -40,13 +61,13 @@ export function VideoTile({
       {/* Remote Audio Element (Never rendered for local to prevent feedback loop) */}
       {!isLocal && <audio ref={audioRef} autoPlay playsInline />}
 
-      {/* Video Stream or Avatar Placeholder */}
+      {/* Video Stream or Avatar Placeholder - video element is ALWAYS muted so audio is only played once by audioRef */}
       {isVideoEnabled && stream ? (
         <video
           ref={videoRef}
           autoPlay
           playsInline
-          muted={isLocal}
+          muted={true}
           className={`w-full h-full object-cover ${isLocal ? "-scale-x-100" : ""}`}
         />
       ) : (

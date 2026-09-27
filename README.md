@@ -65,6 +65,25 @@ HUSH is a modern, privacy-first ephemeral chat web application built with **Next
 
 ---
 
+## Phase 3 & 4: Voice, Video & Screen Sharing
+
+- **🎙️ Voice Call**: Studio-grade WebRTC audio with dynamic compression, high-pass filtering, and native echo cancellation.
+- **📹 Video Call**: Local preview, remote peer video grid, and responsive camera toggle.
+- **🖥️ Screen Sharing**: 1080p 30fps screen share with track replacement and browser capture controls.
+
+---
+
+## Phase 5: Temporary Image Sharing & File Transfer
+
+- **📸 In-Memory Image Previews**: Direct inline rendering for JPEG, PNG, WebP, and GIF images.
+- **📁 Universal File Transfers**: Seamless peer-to-peer binary transfer for documents (PDF, TXT, DOCX), archives (ZIP), and binaries.
+- **⚡ WebRTC DataChannel Chunking**: Files streamed in 64 KB binary `ArrayBuffer` packets with active backpressure (`bufferedamountlow`) management.
+- **🛡️ 100 MB Configurable Limit**: Instant client-side validation prevents oversized file transfers.
+- **🚫 Zero Server Storage**: No databases, cloud buckets, or server uploads. Files exist strictly in volatile browser memory.
+- **🧹 Automatic Session Garbage Collection**: Chunk buffers and `blob:` URLs revoked immediately upon download, cancellation, disconnect, or room close.
+
+---
+
 ## Getting Started
 
 ### Prerequisites

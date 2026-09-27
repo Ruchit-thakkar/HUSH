@@ -4,7 +4,12 @@ import React, { useEffect, useRef } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { Lock, ShieldCheck } from "lucide-react";
 
-export function ChatWindow({ messages = [], myUserId = "", hostId = "" }) {
+export function ChatWindow({
+  messages = [],
+  myUserId = "",
+  hostId = "",
+  onCancelTransfer,
+}) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -20,7 +25,7 @@ export function ChatWindow({ messages = [], myUserId = "", hostId = "" }) {
           <span>Active Ephemeral Session</span>
         </div>
         <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
-          Messages exist only in active device memory. No database, no chat logging.
+          Messages and files exist only in active device memory. No database, no chat logging.
         </p>
       </div>
 
@@ -34,7 +39,7 @@ export function ChatWindow({ messages = [], myUserId = "", hostId = "" }) {
             Say it. Don&apos;t save it.
           </h3>
           <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-            This room is ready. Messages sent here will disappear permanently when the session ends or you leave.
+            This room is ready. Messages and files sent here will disappear permanently when the session ends or you leave.
           </p>
         </div>
       ) : (
@@ -45,6 +50,7 @@ export function ChatWindow({ messages = [], myUserId = "", hostId = "" }) {
               message={msg}
               isMe={msg.senderId === myUserId}
               isHostSender={msg.senderId === hostId}
+              onCancelTransfer={onCancelTransfer}
             />
           ))}
           <div ref={bottomRef} />

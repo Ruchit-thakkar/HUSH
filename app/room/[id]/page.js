@@ -8,6 +8,7 @@ import { MessageInput } from "@/components/MessageInput";
 import { ParticipantModal } from "@/components/ParticipantModal";
 import { CloseRoomModal } from "@/components/CloseRoomModal";
 import { VideoGrid } from "@/components/VideoGrid";
+import { ScreenShareView } from "@/components/ScreenShareView";
 import { CallControls } from "@/components/CallControls";
 import { useUser } from "@/context/UserContext";
 import { useRoom } from "@/hooks/useRoom";
@@ -45,11 +46,22 @@ export default function RoomPage({ params }) {
     startCall,
     leaveCall,
     retryMedia,
+    // Phase 4: Screen Sharing State & Actions
+    screenStream,
+    isScreenSharing,
+    screenSharerId,
+    screenShareError,
+    startScreenShare,
+    stopScreenShare,
+    retryScreenShare,
     // Room Actions
     sendMessage,
     closeRoom,
     kickUser,
     leaveRoom,
+    // Phase 5: File & Image Transfer
+    sendFile,
+    cancelFileTransfer,
   } = useRoom({
     roomId,
     userId,
@@ -65,9 +77,11 @@ export default function RoomPage({ params }) {
     await closeRoom();
   };
 
-  // Determine if a media call session is active (locally or remotely)
-  const isCallActive =
+  // Determine if any media call or screen sharing session is active
+  const isMediaActive =
     inCall ||
+    isScreenSharing ||
+    Boolean(screenSharerId) ||
     remoteStreams.size > 0 ||
     Array.from(peerMediaStates.values()).some((s) => s.inCall);
 
@@ -102,9 +116,7 @@ export default function RoomPage({ params }) {
             Room Closed
           </h2>
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-6 leading-relaxed">
-            {isHost
-              ? "Messages and media streams from this session were not stored."
-              : "This room has been closed by the host."}
+            Temporary files and messages from this session were discarded.
           </p>
           <button
             onClick={() => router.push("/")}
@@ -182,7 +194,7 @@ export default function RoomPage({ params }) {
     );
   }
 
-  // State 5: Active Room (Text Chat + Video & Voice Call)
+  // State 5: Active Room (Text Chat + Video & Voice Call + Screen Share)
   return (
     <div className="h-screen max-h-screen flex flex-col bg-[#fbfbfb] dark:bg-[#09090b] text-[#09090b] dark:text-[#f4f4f5] overflow-hidden transition-colors">
       <Navbar
@@ -203,24 +215,25 @@ export default function RoomPage({ params }) {
         </div>
       )}
 
-      {/* Call Invitation Toolbar when call is not active */}
-      {!isCallActive && (
+      {/* Call Toolbar when call is not active */}
+      {!isMediaActive && (
         <div className="w-full border-b border-neutral-200 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-900/40 px-4 py-2 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-neutral-400" />
             <span className="text-xs font-mono text-neutral-600 dark:text-neutral-400">
-              P2P Encrypted Voice & Video
+              Encrypted Voice, Video & Screen Sharing
             </span>
           </div>
           <CallControls
             inCall={false}
             onStartCall={startCall}
+            onStartScreenShare={startScreenShare}
           />
         </div>
       )}
 
-      {/* Media Permission Warning Banner (if call inactive but permission error occurred) */}
-      {!isCallActive && mediaError && (
+      {/* Media Permission Warning Banner */}
+      {!isMediaActive && mediaError && (
         <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-xs text-amber-600 dark:text-amber-400 font-mono shrink-0">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
@@ -237,34 +250,103 @@ export default function RoomPage({ params }) {
         </div>
       )}
 
+      {/* Screen Sharing Notification / Error Banner */}
+      {screenShareError && (
+        <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between text-xs text-amber-600 dark:text-amber-400 font-mono shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <span>{screenShareError}</span>
+          </div>
+          {screenShareError !== "Screen sharing cancelled." &&
+            screenShareError !== "Someone is already sharing their screen." &&
+            screenShareError !== "Screen sharing isn't supported in this browser." && (
+              <button
+                type="button"
+                onClick={retryScreenShare}
+                className="flex items-center gap-1 px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-medium cursor-pointer"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Try Again</span>
+              </button>
+            )}
+        </div>
+      )}
+
       {/* Main Room Body */}
-      {isCallActive ? (
-        /* Video Grid + Chat Split / Stacked View */
+      {isMediaActive ? (
+        /* Video Grid / Screen Share + Chat Split View */
         <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
-          {/* Left/Top: Video Grid & Controls */}
-          <div className="w-full lg:w-3/5 xl:w-2/3 flex flex-col p-2 sm:p-3 min-h-[220px] sm:min-h-[270px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-neutral-200 dark:border-neutral-800 bg-neutral-950/20">
+          {/* Left/Top: Media Display (Screen Share or Video Grid) & Call Controls */}
+          <div className="w-full lg:w-3/5 xl:w-2/3 flex flex-col p-2 sm:p-3 min-h-[260px] sm:min-h-[300px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-neutral-200 dark:border-neutral-800 bg-neutral-950/20">
+            {/* Active Display Area */}
             <div className="flex-1 min-h-0 overflow-hidden">
-              <VideoGrid
-                myUserId={userId}
-                hostId={hostId}
-                isHost={isHost}
-                localStream={localStream}
-                remoteStreams={remoteStreams}
-                peerMediaStates={peerMediaStates}
-                isAudioEnabled={isAudioEnabled}
-                isVideoEnabled={isVideoEnabled}
-                inCall={inCall}
-                mediaError={mediaError}
-                retryMedia={retryMedia}
-              />
+              {screenSharerId ? (
+                /* Phase 4: Screen Share View with optional compact participant strip */
+                <div className="flex flex-col w-full h-full min-h-0 gap-2">
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    <ScreenShareView
+                      stream={
+                        isScreenSharing
+                          ? screenStream
+                          : remoteStreams.get(screenSharerId)
+                      }
+                      sharerId={screenSharerId}
+                      isLocal={isScreenSharing}
+                      onStopSharing={stopScreenShare}
+                      localCameraStream={localStream}
+                      isLocalCameraEnabled={isVideoEnabled}
+                    />
+                  </div>
+
+                  {/* Compact Participant Strip if multiple users connected */}
+                  {connectedCount > 1 && (
+                    <div className="h-20 sm:h-24 shrink-0 overflow-hidden">
+                      <VideoGrid
+                        myUserId={userId}
+                        hostId={hostId}
+                        isHost={isHost}
+                        localStream={localStream}
+                        remoteStreams={remoteStreams}
+                        peerMediaStates={peerMediaStates}
+                        isAudioEnabled={isAudioEnabled}
+                        isVideoEnabled={isVideoEnabled}
+                        inCall={inCall}
+                        mediaError={mediaError}
+                        retryMedia={retryMedia}
+                        compact={true}
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Phase 3: Standard Responsive Video Grid */
+                <VideoGrid
+                  myUserId={userId}
+                  hostId={hostId}
+                  isHost={isHost}
+                  localStream={localStream}
+                  remoteStreams={remoteStreams}
+                  peerMediaStates={peerMediaStates}
+                  isAudioEnabled={isAudioEnabled}
+                  isVideoEnabled={isVideoEnabled}
+                  inCall={inCall}
+                  mediaError={mediaError}
+                  retryMedia={retryMedia}
+                />
+              )}
             </div>
+
+            {/* Bottom Docked Call Controls */}
             <div className="shrink-0 flex justify-center pt-2">
               <CallControls
                 inCall={inCall}
                 isAudioEnabled={isAudioEnabled}
                 isVideoEnabled={isVideoEnabled}
+                isScreenSharing={isScreenSharing}
                 onToggleAudio={toggleAudio}
                 onToggleVideo={toggleVideo}
+                onStartScreenShare={startScreenShare}
+                onStopScreenShare={stopScreenShare}
                 onLeaveCall={leaveCall}
                 onStartCall={startCall}
               />
@@ -277,9 +359,11 @@ export default function RoomPage({ params }) {
               messages={messages}
               myUserId={userId}
               hostId={hostId}
+              onCancelTransfer={cancelFileTransfer}
             />
             <MessageInput
               onSendMessage={sendMessage}
+              onSendFile={sendFile}
             />
           </div>
         </div>
@@ -290,9 +374,11 @@ export default function RoomPage({ params }) {
             messages={messages}
             myUserId={userId}
             hostId={hostId}
+            onCancelTransfer={cancelFileTransfer}
           />
           <MessageInput
             onSendMessage={sendMessage}
+            onSendFile={sendFile}
           />
         </div>
       )}
